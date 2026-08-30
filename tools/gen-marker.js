@@ -20,6 +20,22 @@ const SEED = parseInt(opt('seed', '20260830'), 10);
 const SIZE = parseInt(opt('size', '1024'), 10);
 const OUT = path.resolve(opt('out', path.join(__dirname, '..', 'marker', 'assets', 'generated')));
 
+// --logo を渡すと、文字の代わりにその画像を中に入れる。
+// ロゴの面は模様が少ないため、入れると認識点は減る。生成後に必ず測り直すこと。
+const LOGO = opt('logo', null);
+let LOGO_URI = null, LOGO_RATIO = 1;
+if (LOGO) {
+  if (!fs.existsSync(LOGO)) { console.error('ロゴが見つかりません: ' + LOGO); process.exit(1); }
+  const buf = fs.readFileSync(LOGO);
+  const ext = path.extname(LOGO).toLowerCase();
+  const mime = ext === '.svg' ? 'image/svg+xml' : (ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png');
+  LOGO_URI = 'data:' + mime + ';base64,' + buf.toString('base64');
+  if (mime === 'image/png') {
+    // PNGヘッダから縦横比を読む
+    LOGO_RATIO = buf.readUInt32BE(20) / buf.readUInt32BE(16);
+  }
+}
+
 // 同じ種を渡せば同じ絵になる擬似乱数（作り直しの再現性のため）
 function rng(seed) {
   let s = seed >>> 0;
@@ -79,9 +95,20 @@ function designB(S) {
              transform="rotate(${(r() - 0.5) * 24} ${gx * cell + cell / 2} ${gy * cell + cell / 2})"/>`;
     }
   }
-  s += `<rect x="${S * 0.08}" y="${S * 0.40}" width="${S * 0.62}" height="${S * 0.14}" fill="#ffffff" stroke="${INK}" stroke-width="${S * 0.014}"/>`;
-  s += `<text x="${S * 0.39}" y="${S * 0.497}" font-family="Arial Black, Arial, sans-serif"
-        font-size="${S * 0.088}" font-weight="900" fill="${INK}" text-anchor="middle">${TEXT}</text>`;
+  if (LOGO_URI) {
+    // ロゴを入れる。認識点を守るため、面積は控えめにし、位置も中央からずらす（非対称を保つ）
+    const w = S * 0.54;
+    const h = w * LOGO_RATIO;
+    const x = S * 0.09, y = S * 0.40;
+    const pad = S * 0.016;
+    s += `<rect x="${x - pad}" y="${y - pad}" width="${w + pad * 2}" height="${h + pad * 2}"
+           fill="#ffffff" stroke="${INK}" stroke-width="${S * 0.012}"/>`;
+    s += `<image x="${x}" y="${y}" width="${w}" height="${h}" href="${LOGO_URI}" preserveAspectRatio="xMidYMid meet"/>`;
+  } else {
+    s += `<rect x="${S * 0.08}" y="${S * 0.40}" width="${S * 0.62}" height="${S * 0.14}" fill="#ffffff" stroke="${INK}" stroke-width="${S * 0.014}"/>`;
+    s += `<text x="${S * 0.39}" y="${S * 0.497}" font-family="Arial Black, Arial, sans-serif"
+          font-size="${S * 0.088}" font-weight="900" fill="${INK}" text-anchor="middle">${TEXT}</text>`;
+  }
   return s;
 }
 

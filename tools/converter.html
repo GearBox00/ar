@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>glb to usdz converter</title></head>
+<body>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { USDZExporter } from 'three/addons/exporters/USDZExporter.js';
+
+// GLBを読み込んで、iPhoneのAR表示に要るusdzへ変換する。
+// 大きさを指定された場合は、いちばん長い辺がその値になるように拡大縮小する。
+window.convert = async (url, targetLongestM) => {
+  const gltf = await new Promise((res, rej) => new GLTFLoader().load(url, res, undefined, rej));
+  const root = gltf.scene;
+
+  const box0 = new THREE.Box3().setFromObject(root);
+  const s0 = new THREE.Vector3(); box0.getSize(s0);
+  const before = { w: +s0.x.toFixed(3), h: +s0.y.toFixed(3), d: +s0.z.toFixed(3) };
+
+  if (targetLongestM) {
+    const longest = Math.max(s0.x, s0.y, s0.z);
+    if (longest > 0) root.scale.multiplyScalar(targetLongestM / longest);
+  }
+
+  // 足元が原点に来るようにそろえる（床に置いたとき沈まないように）
+  root.updateMatrixWorld(true);
+  const box1 = new THREE.Box3().setFromObject(root);
+  root.position.y -= box1.min.y;
+  root.position.x -= (box1.min.x + box1.max.x) / 2;
+  root.position.z -= (box1.min.z + box1.max.z) / 2;
+  root.updateMatrixWorld(true);
+
+  const box2 = new THREE.Box3().setFromObject(root);
+  const s2 = new THREE.Vector3(); box2.getSize(s2);
+
+  const scene = new THREE.Scene();
+  scene.add(root);
+  const usdz = await new USDZExporter().parseAsync(scene);
+
+  const bytes = new Uint8Array(usdz.buffer ? usdz.buffer : usdz);
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+
+  let meshes = 0, textured = 0;
+  root.traverse((o) => { if (o.isMesh) { meshes++; if (o.material && o.material.map) textured++; } });
+
+  return {
+    usdz: btoa(s),
+    before,
+    after: { w: +s2.x.toFixed(3), h: +s2.y.toFixed(3), d: +s2.z.toFixed(3) },
+    meshes, textured,
+  };
+};
+window.__ready = true;
+</script>
+</body>
+</html>

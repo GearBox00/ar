@@ -94,20 +94,30 @@
   <a-entity id="target" mindar-image-target="targetIndex: 0">
     <a-plane position="0 0 0" height="1" width="1" color="#00ffcc" opacity="0.12"></a-plane>
 
+    <!-- 影。実際の影ではなく、浮き沈みに合わせて濃さと大きさを変える円で代用する -->
+    <a-circle id="shadow" radius="0.17" position="0 0.12 0.004" color="#000000" opacity="0.28"
+      material="transparent: true"
+      animation__s="property: scale; from: 1 1 1; to: 0.72 0.72 1; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine"
+      animation__o="property: components.material.material.opacity; from: 0.28; to: 0.14; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine"></a-circle>
+
     <!-- 歯車マーク: 黄色い円盤に厚みをつけ、表と裏にロゴを貼って回す。
          ロゴは四角い板に貼る（円の板だと模様の貼り方が放射状になり、絵が歪む） -->
     <a-entity id="gear" position="0 0.12 0.10"
-      animation__bob="property: position; to: 0 0.12 0.17; dir: alternate; loop: true; dur: 2600; easing: easeInOutSine">
-      <a-entity animation="property: rotation; to: 0 0 360; loop: true; dur: 11000; easing: linear">
-        <!-- 黄色い縁（横から見たときのブランド色） -->
-        <a-cylinder radius="0.17" height="0.04" color="#FFDE59" rotation="90 0 0"></a-cylinder>
-        <!-- 白地。元のロゴは白背景を前提にした絵なので、透けた部分に白を置く -->
-        <a-circle radius="0.155" position="0 0 0.021" color="#FFFFFF"></a-circle>
-        <a-circle radius="0.155" position="0 0 -0.021" rotation="0 180 0" color="#FFFFFF"></a-circle>
-        <a-plane width="0.44" height="0.44" position="0 0 0.024"
-          material="src: #logoMark; transparent: true; alphaTest: 0.35"></a-plane>
-        <a-plane width="0.44" height="0.44" position="0 0 -0.024" rotation="0 180 0"
-          material="src: #logoMark; transparent: true; alphaTest: 0.35"></a-plane>
+      animation__bob="property: position; to: 0 0.12 0.175; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine">
+      <!-- わずかに前後へ傾けて、立体感を出す -->
+      <a-entity animation__tilt="property: rotation; from: -7 0 0; to: 7 0 0; dir: alternate; loop: true; dur: 5200; easing: easeInOutSine">
+        <a-entity animation="property: rotation; to: 0 0 360; loop: true; dur: 7000; easing: linear">
+          <!-- 黄色い縁（横から見たときのブランド色）。少しつやを持たせる -->
+          <a-cylinder radius="0.17" height="0.04" rotation="90 0 0"
+            material="color: #FFDE59; metalness: 0.3; roughness: 0.28"></a-cylinder>
+          <!-- 白地。元のロゴは白背景を前提にした絵なので、透けた部分に白を置く -->
+          <a-circle radius="0.155" position="0 0 0.021" material="color: #FFFFFF; roughness: 0.45"></a-circle>
+          <a-circle radius="0.155" position="0 0 -0.021" rotation="0 180 0" material="color: #FFFFFF; roughness: 0.45"></a-circle>
+          <a-plane width="0.44" height="0.44" position="0 0 0.024"
+            material="src: #logoMark; transparent: true; alphaTest: 0.35"></a-plane>
+          <a-plane width="0.44" height="0.44" position="0 0 -0.024" rotation="0 180 0"
+            material="src: #logoMark; transparent: true; alphaTest: 0.35"></a-plane>
+        </a-entity>
       </a-entity>
     </a-entity>
 
@@ -115,8 +125,11 @@
     <a-plane id="sign" width="0.80" height="0.246" position="0 -0.32 0.128" rotation="-90 0 0"
       material="src: #logoLockup; side: double"></a-plane>
 
-    <a-light type="ambient" intensity="1.0"></a-light>
-    <a-light type="directional" intensity="0.85" position="1 2 1"></a-light>
+    <a-light type="ambient" intensity="0.85"></a-light>
+    <a-light type="directional" intensity="0.7" position="1 2 1.5"></a-light>
+    <!-- 動く光。まわりを回らせて、金属のつやが流れるように見せる -->
+    <a-light id="sweep" type="point" intensity="0.9" distance="3" color="#fff6d5" position="0.6 0.2 0.6"
+      animation="property: position; from: 0.6 0.2 0.6; to: -0.6 0.4 0.6; dir: alternate; loop: true; dur: 4200; easing: easeInOutSine"></a-light>
   </a-entity>
 </a-scene>
 
