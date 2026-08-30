@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>mind compiler</title></head>
+<body>
+<script type="module">
+  import './vendor/mindar-image.prod.js';
+
+  const loadImage = (src) => new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('画像を読み込めません: ' + src.slice(0, 60)));
+    img.src = src;
+  });
+
+  // 認識点の数を数える。MindARの内部構造が版によって変わるため、防御的に走査する。
+  const countPoints = (data) => {
+    let total = 0;
+    const scales = [];
+    const md = data && data.matchingData;
+    if (Array.isArray(md)) {
+      for (const level of md) {
+        const n = (level.maximaPoints ? level.maximaPoints.length : 0)
+                + (level.minimaPoints ? level.minimaPoints.length : 0);
+        scales.push({ width: level.width, height: level.height, points: n });
+        total += n;
+      }
+    }
+    return { total, scales };
+  };
+
+  window.compile = async (sources) => {
+    const images = [];
+    for (const s of sources) images.push(await loadImage(s));
+    const compiler = new window.MINDAR.IMAGE.Compiler();
+    const dataList = await compiler.compileImageTargets(images, () => {});
+    const buffer = await compiler.exportData();
+    const bytes = new Uint8Array(buffer);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return {
+      base64: btoa(bin),
+      stats: dataList.map((d, i) => ({
+        index: i,
+        size: images[i].naturalWidth + 'x' + images[i].naturalHeight,
+        ...countPoints(d),
+      })),
+    };
+  };
+  window.__ready = true;
+</script>
+</body>
+</html>

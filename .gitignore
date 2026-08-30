@@ -1,0 +1,4 @@
+# 比較用に作った中間ファイル（公開に不要）
+marker/assets/generated/compare.mind
+node_modules/
+tools/host.txt

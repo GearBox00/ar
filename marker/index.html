@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AR試作① 画像マーカー型</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
+  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
+  body { position:fixed; inset:0; }
+  a-scene { width:100vw; height:100vh; }
+
+  .ui {
+    position:fixed; left:0; right:0; bottom:0; z-index:100;
+    padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    background:rgba(0,0,0,.62); color:#fff;
+    font-family:system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+    font-size:13.5px; line-height:1.6;
+    display:flex; gap:12px; align-items:center;
+  }
+  .ui img {
+    width:74px; height:74px; flex:none; border-radius:6px;
+    background:#fff; object-fit:contain;
+  }
+  .ui a { color:#7fd1ff; }
+
+  /* しばらく見つからないときのヒント */
+  #hint {
+    position:fixed; left:12px; right:12px; z-index:100;
+    bottom:calc(112px + env(safe-area-inset-bottom));
+    display:none; padding:12px 14px; border-radius:10px;
+    background:rgba(20,24,30,.9); color:#fff;
+    font-family:system-ui, sans-serif; font-size:13px; line-height:1.7;
+  }
+
+  #status {
+    position:fixed; top:calc(10px + env(safe-area-inset-top)); left:50%;
+    transform:translateX(-50%); z-index:100;
+    padding:8px 16px; border-radius:999px; max-width:90vw;
+    background:rgba(0,0,0,.66); color:#fff;
+    font-family:system-ui, sans-serif; font-size:13px; text-align:center;
+  }
+  #status.found { background:rgba(0,140,80,.9); }
+
+  /* 失敗したときに、黙って止まらず理由を出すための画面 */
+  #error {
+    position:fixed; inset:0; z-index:10000; display:none;
+    padding:28px 22px; overflow:auto;
+    background:#101318; color:#f2f4f7;
+    font-family:system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+    font-size:14px; line-height:1.85;
+  }
+  #error h2 { font-size:17px; margin:0 0 10px; color:#ff8a80; }
+  #error code { background:rgba(255,255,255,.1); padding:2px 6px; border-radius:4px; word-break:break-all; }
+  #error ol { padding-left:1.3em; }
+  #error .detail { margin-top:18px; font-size:12.5px; opacity:.75; }
+</style>
+</head>
+<body>
+
+<div id="status">準備しています</div>
+
+<div class="ui">
+  <img src="./assets/marker.png" alt="さがしている絵">
+  <div>
+    <b>この絵をさがしています。</b><br>
+    PCで <a href="./show.html" target="_blank">マーカー表示ページ</a> を開き、その画面にカメラを向けてください。
+  </div>
+</div>
+
+<div id="hint"></div>
+
+<div id="error">
+  <h2 id="error-title">カメラを使えませんでした</h2>
+  <div id="error-body"></div>
+  <div class="detail" id="error-detail"></div>
+</div>
+
+<a-scene id="scene"
+  mindar-image="imageTargetSrc: ./assets/targets.mind; filterMinCF: 0.0001; filterBeta: 0.001; missTolerance: 5; warmupTolerance: 1"
+  color-space="sRGB"
+  renderer="colorManagement: true, physicallyCorrectLights"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
+
+  <a-assets timeout="20000">
+    <a-asset-item id="model" src="../place/assets/Astronaut.glb"></a-asset-item>
+  </a-assets>
+
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+  <a-entity id="target" mindar-image-target="targetIndex: 0">
+    <a-plane position="0 0 0" height="1" width="1" color="#00ffcc" opacity="0.18"></a-plane>
+
+    <a-entity position="0 0 0.02"
+      animation="property: rotation; to: 0 0 360; loop: true; dur: 9000; easing: linear">
+      <a-gltf-model src="#model" rotation="-90 0 0" scale="0.3 0.3 0.3"></a-gltf-model>
+    </a-entity>
+
+    <a-light type="ambient" intensity="1.1"></a-light>
+    <a-light type="directional" intensity="0.9" position="1 2 1"></a-light>
+  </a-entity>
+</a-scene>
+
+<script>
+(function () {
+  const statusEl = document.querySelector('#status');
+  const scene    = document.querySelector('#scene');
+  const target   = document.querySelector('#target');
+  const errBox   = document.querySelector('#error');
+  const hint     = document.querySelector('#hint');
+  let ready = false;
+
+  function fail(title, htmlBody, detail) {
+    document.querySelector('#error-title').textContent = title;
+    document.querySelector('#error-body').innerHTML = htmlBody;
+    // URLは組み立てた文字列に混ぜず、文字として入れる（細工したURLでスクリプトが動くのを防ぐ）
+    const cur = document.querySelector('#cur-url');
+    if (cur) cur.textContent = location.href;
+    document.querySelector('#error-detail').textContent = detail || '';
+    errBox.style.display = 'block';
+    statusEl.style.display = 'none';
+  }
+
+  // 1. httpsかどうかを、カメラを触る前に判定する
+  const url = new URL(location.href);
+  const localHost = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  if (!window.isSecureContext && !localHost) {
+    fail('httpsでないため、カメラを使えません',
+      '<p>ブラウザは、暗号化されていないページにカメラを渡しません。いま開いているのは次のURLです。</p>' +
+      '<p><code id="cur-url"></code></p>' +
+      '<p>次のいずれかで開き直してください。</p><ol>' +
+      '<li><b>https</b> で始まるURLで開く</li>' +
+      '<li>このPC上で <code>localhost</code> として開く（PCのカメラで確認する場合）</li>' +
+      '</ol>',
+      'isSecureContext=' + window.isSecureContext + ' / protocol=' + location.protocol);
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    fail('このブラウザではカメラを使えません',
+      '<p>カメラを扱う機能（getUserMedia）が見つかりませんでした。SafariかChromeの最新版でお試しください。</p>',
+      'userAgent: ' + navigator.userAgent);
+    return;
+  }
+
+  // 2. MindARの合図を受け取る
+  scene.addEventListener('arReady', () => {
+    ready = true;
+    statusEl.textContent = 'マーカーをさがしています';
+  });
+  scene.addEventListener('arError', (e) => {
+    fail('ARを開始できませんでした',
+      '<p>カメラの使用が許可されなかったか、他のアプリがカメラを使っている可能性があります。' +
+      'ページを再読み込みして、カメラの確認が出たら「許可」を選んでください。</p>',
+      'arError: ' + JSON.stringify(e && e.detail || {}));
+  });
+
+  target.addEventListener('targetFound', () => {
+    statusEl.textContent = 'マーカーを認識しました';
+    statusEl.classList.add('found');
+  });
+  target.addEventListener('targetLost', () => {
+    statusEl.textContent = 'マーカーをさがしています';
+    statusEl.classList.remove('found');
+  });
+
+  // 3. 認識が始まらないときのヒント（左下の見本と、映している絵が同じか）
+  let everFound = false;
+  target.addEventListener('targetFound', () => { everFound = true; hint.style.display = 'none'; });
+  setTimeout(() => {
+    if (!ready || everFound) return;
+    hint.innerHTML =
+      '<b>まだ見つかりません。</b><br>' +
+      '1. 左下の見本と、映している絵が同じか確かめてください<br>' +
+      '2. 絵が画面いっぱいに写るまで近づいてください<br>' +
+      '3. PCの画面を映している場合は、明るさを上げ、反射を避けてください';
+    hint.style.display = 'block';
+  }, 15000);
+
+  // 4. 20秒たっても始まらないときは、黙って待たずに理由の候補を出す
+  setTimeout(() => {
+    if (ready) return;
+    const video = document.querySelector('video');
+    fail('読み込みが終わりませんでした',
+      '<p>20秒たってもカメラの映像が始まりませんでした。次のどれかに当てはまることが多いです。</p><ol>' +
+      '<li>カメラの使用を許可していない（ブラウザのアドレス欄の鍵マークから許可できます）</li>' +
+      '<li>他のアプリやタブがカメラを使っている</li>' +
+      '<li>認識ファイル（targets.mind）か3Dモデルを読み込めていない</li>' +
+      '<li>通信が遅く、ライブラリの取得が終わっていない</li>' +
+      '</ol><p>ページを再読み込みすると直ることがあります。</p>',
+      '映像の要素: ' + (video ? (video.videoWidth + 'x' + video.videoHeight) : 'なし') +
+      ' / A-Frame: ' + (window.AFRAME ? window.AFRAME.version : '未読込') +
+      ' / MindAR: ' + (window.MINDAR ? 'あり' : 'なし'));
+  }, 20000);
+})();
+</script>
+</body>
+</html>

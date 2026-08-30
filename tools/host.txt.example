@@ -1,0 +1,4 @@
+# ご自分のTailscaleの端末名を1行だけ書いてください。
+# 例: mypc.tailXXXXXX.ts.net
+# 端末名は tailscale status で確認できます。
+machine.tailnet.ts.net

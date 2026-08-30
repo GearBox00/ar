@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AR試作</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin:0; padding:32px 18px 60px; line-height:1.8;
+    font-family: system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+    background:#f6f7f9; color:#1a1a1a;
+  }
+  @media (prefers-color-scheme: dark){ body{ background:#14161a; color:#eaeaea; } }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 26px; font-size: 14px; opacity:.85; }
+  a.card {
+    display:block; text-decoration:none; color:inherit;
+    border:1px solid rgba(128,128,128,.35); border-radius:14px;
+    padding:18px 20px; margin-bottom:14px; background:#fff;
+  }
+  @media (prefers-color-scheme: dark){ a.card{ background:#1c1f24; } }
+  a.card b { display:block; font-size:17px; margin-bottom:4px; }
+  a.card span { font-size:13.5px; opacity:.8; }
+  .warn { margin-top:26px; font-size:13px; opacity:.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AR試作</h1>
+  <p class="lead">スマートフォンで開いてください。カメラの使用許可を求められたら「許可」を選びます。</p>
+
+  <a class="card" href="./marker/">
+    <b>① 印刷物にかざす（画像マーカー型）</b>
+    <span>決まった絵にカメラを向けると、その上にCGが重なります。チラシ、パッケージ、展示パネル向け。</span>
+  </a>
+
+  <a class="card" href="./place/">
+    <b>② 床や机に置く（平面設置型）</b>
+    <span>床を検出して、原寸のモデルをその場に置きます。家具やキャラクターの設置イメージ向け。</span>
+  </a>
+
+  <p class="warn">3Dモデル: Astronaut by Poly (Google), licensed under
+    <a href="https://creativecommons.org/licenses/by/2.0/">CC-BY 2.0</a>.</p>
+
+  <p class="warn">httpsで配信されているページでないと、ブラウザがカメラを使わせません。ローカルのファイルを直接開いても動かない点にご注意ください。</p>
+</div>
+</body>
+</html>
