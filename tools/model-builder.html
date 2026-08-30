@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>logo model builder</title></head>
+<body>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { USDZExporter } from 'three/addons/exporters/USDZExporter.js';
+
+const loadTex = (url) => new Promise((res, rej) => {
+  new THREE.TextureLoader().load(url, (t) => {
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.flipY = true;
+    res(t);
+  }, undefined, rej);
+});
+
+// 床に置く「ロゴの立て看板」を組む。単位はメートル。
+// 台座の上に歯車のコインが立ち、台座の前面に社名ロゴが入る。
+window.buildAndExport = async (opts) => {
+  const YELLOW = 0xFFDE59;
+  const discTex = await loadTex(opts.discUrl);
+  const wordTex = await loadTex(opts.wordUrl);
+
+  const root = new THREE.Group();
+  root.name = 'GearBoxLogo';
+
+  const R = opts.coinRadius;        // コインの半径
+  const T = opts.coinThickness;     // コインの厚み
+  const baseH = 0.06, baseW = R * 2.5, baseD = R * 0.9;
+
+  // 台座
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(baseW, baseH, baseD),
+    new THREE.MeshStandardMaterial({ color: YELLOW, roughness: 0.6, metalness: 0.0 }));
+  base.position.y = baseH / 2;
+  base.name = 'base';
+  root.add(base);
+
+  // 台座の前面に社名ロゴ
+  const word = new THREE.Mesh(
+    new THREE.PlaneGeometry(baseW * 0.9, baseW * 0.9 * (430 / 1400)),
+    new THREE.MeshStandardMaterial({ map: wordTex, roughness: 0.7 }));
+  word.position.set(0, baseH / 2, baseD / 2 + 0.001);
+  word.name = 'wordmark';
+  root.add(word);
+
+  // コイン本体（縁の色がブランド色になる）
+  const coin = new THREE.Mesh(
+    new THREE.CylinderGeometry(R, R, T, 72),
+    new THREE.MeshStandardMaterial({ color: YELLOW, roughness: 0.5 }));
+  coin.rotation.x = Math.PI / 2;
+  coin.position.set(0, baseH + R, 0);
+  coin.name = 'coin';
+  root.add(coin);
+
+  // コインの表と裏に歯車マーク（白地に合成済みの不透明な絵）
+  for (const sign of [1, -1]) {
+    const face = new THREE.Mesh(
+      new THREE.CircleGeometry(R * 0.96, 72),
+      new THREE.MeshStandardMaterial({ map: discTex, roughness: 0.55 }));
+    face.position.set(0, baseH + R, sign * (T / 2 + 0.002));
+    if (sign < 0) face.rotation.y = Math.PI;
+    face.name = 'face' + (sign > 0 ? 'Front' : 'Back');
+    root.add(face);
+  }
+
+  const scene = new THREE.Scene();
+  scene.add(root);
+
+  const glb = await new Promise((res, rej) =>
+    new GLTFExporter().parse(scene, res, rej, { binary: true }));
+  const usdz = await new USDZExporter().parseAsync(scene);
+
+  const b64 = (buf) => {
+    const bytes = new Uint8Array(buf);
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  };
+
+  // 出来上がりの寸法を返して、あとで検算できるようにする
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+
+  return {
+    glb: b64(glb),
+    usdz: b64(usdz.buffer ? usdz.buffer : usdz),
+    size: { w: +size.x.toFixed(3), h: +size.y.toFixed(3), d: +size.z.toFixed(3) },
+    meshes: root.children.length,
+  };
+};
+window.__ready = true;
+</script>
+</body>
+</html>

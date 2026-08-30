@@ -123,14 +123,44 @@ Blenderの USDZ アドオンで変換できる。
 | ファイル | 出どころ | ライセンス |
 | --- | --- | --- |
 | `marker/assets/marker.png` / `targets.mind` | 自作（`tools/gen-marker.js` で生成） | 自社 |
+| `marker/assets/logo-mark.png` / `logo-lockup.png` | 自社ロゴ（`E:/wordpress/gearbox-appli/_original_20260822/assets/img/`） | 自社 |
+| `place/assets/gearbox-logo.glb` / `.usdz` | 自作（`tools/make-logo-model.js` で生成） | 自社 |
 | `marker/assets/card.png` / `card.mind` | MindAR公式サンプル（比較用に残してある） | MindAR（MIT）のexamples |
-| `place/assets/Astronaut.glb` / `.usdz` | Poly by Google | **CC-BY 2.0**（表示が必要） |
 
-Astronautモデルの表記:
-Astronaut by Poly (Google), licensed under CC-BY 2.0
-https://creativecommons.org/licenses/by/2.0/
+2026-08-30に、サンプルの宇宙飛行士（Poly by Google, CC-BY 2.0）を自社ロゴへ差し替えた。
+外部素材が無くなったため、権利表記も削除している。
 
-差し替えるときは、ページ内の表記も一緒に消すこと。
+ブランド色 **#FFDE59** は `logo-lockup-yellow.png` の最頻色を実測して決めた。
+
+## 中身（重ねるもの）を差し替える
+
+### ① マーカー型
+
+`marker/index.html` の `<a-entity id="gear">` と `<a-plane id="sign">` が中身。
+歯車は「黄色い円盤 + 白地 + ロゴを貼った四角い板」で組んである。
+
+**ロゴを貼るのは四角い板（a-plane）にすること。** 円の板（a-circle）に貼ると、
+模様の貼り方が放射状になって絵が歪む。実際に一度そうなった。
+
+透明な部分から下地の色が透けるため、元の絵が白背景を前提にしている場合は、
+白い円盤を1枚挟む。挟まないとロゴが読めなくなる。
+
+### ② 床置き型
+
+```
+node tools/make-logo-model.js
+```
+
+`place/assets/` に glb と usdz が出る。台座の上にロゴのコインが立つ形。
+形や大きさを変えるときは `tools/model-builder.html` の `buildAndExport` を直す。
+
+```
+node tools/make-logo-model.js --radius 0.35 --thickness 0.08
+```
+
+**iPhoneの「ARで見る」には usdz が要る。** glbだけではAR表示にならない。
+どちらも three.js の書き出し機能をこのPCのブラウザで走らせて作っている。
+Blenderも外部サービスも使わない。
 
 いずれも動作確認用のサンプル。実案件で使う前に差し替えること。
 
@@ -166,6 +196,9 @@ Playwrightで、カード画像を映した疑似カメラをChromiumに食わ�
 | 印刷用PDF | 3ページ・A4(209.9x297.0mm)・マーカーの実寸150/100/60mmを描画結果から実測して一致 |
 | PDFのQRコード | jsQRで読み取り、3ページとも公開URLを指していることを確認 |
 | 印刷レイアウトでの認識 | 紙面全体を写した状態を再現して認識成功（切り取り線や余白があっても読める） |
+| ①の中身を自社ロゴへ差し替え | 認識成功。歯車と社名ロゴの表示をスクリーンショットで目視（2026-08-30） |
+| ②の中身を自社ロゴへ差し替え | glb/usdzを生成して表示成功。実寸 0.625 x 0.616 x 0.226 m |
+| usdzの形式 | zipの中身・無圧縮・64バイト境界への整列をすべて確認（iOSの要件） |
 
 ## 未確認事項
 
