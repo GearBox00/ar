@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARが動くかの診断</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin:0; padding:18px 16px 60px; line-height:1.7;
+    font-family: system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+    background:#f6f7f9; color:#16181d; font-size:15px;
+  }
+  @media (prefers-color-scheme: dark){ body{ background:#14161a; color:#e9ecf1; } }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .lead { font-size:13.5px; opacity:.8; margin:0 0 18px; }
+  .row {
+    display:flex; gap:10px; align-items:flex-start;
+    padding:10px 12px; border-radius:9px; margin-bottom:8px;
+    background:#fff; border:1px solid rgba(128,128,128,.28);
+  }
+  @media (prefers-color-scheme: dark){ .row{ background:#1c1f25; } }
+  .mark { flex:none; width:1.5em; font-size:16px; font-weight:700; }
+  .ok .mark { color:#0a8a4a; }
+  .ng .mark { color:#d1344b; }
+  .wa .mark { color:#c47f00; }
+  .name { font-weight:600; font-size:14px; }
+  .val { font-size:12.5px; opacity:.85; word-break:break-all; }
+  .banner {
+    padding:14px 16px; border-radius:10px; margin-bottom:16px;
+    background:#fdecef; border:1px solid #f0a8b4; color:#8a1128; font-size:14px;
+  }
+  .banner b { display:block; margin-bottom:4px; font-size:15px; }
+  button {
+    width:100%; padding:14px; font-size:15px; font-weight:600; margin-top:14px;
+    border:none; border-radius:10px; background:#0a6ed1; color:#fff;
+  }
+  button.sub { background:#5a616e; }
+  pre {
+    margin-top:14px; padding:12px; border-radius:9px; font-size:11px;
+    background:#0e1116; color:#d7dde6; overflow:auto; white-space:pre-wrap; word-break:break-all;
+  }
+</style>
+</head>
+<body>
+<h1>ARが動くかの診断</h1>
+<p class="lead">この画面をそのまま撮って送っていただければ、動かない原因が分かります。</p>
+
+<div id="banner"></div>
+<div id="list"></div>
+
+<button id="camBtn">カメラを実際に試す</button>
+<button id="copyBtn" class="sub">結果を文字でコピーする</button>
+<pre id="raw"></pre>
+
+<script>
+(function () {
+  const list = document.querySelector('#list');
+  const results = [];
+
+  function add(state, name, val) {
+    results.push({ state, name, val: String(val) });
+    const d = document.createElement('div');
+    d.className = 'row ' + state;
+    d.innerHTML = '<div class="mark">' + (state === 'ok' ? '○' : state === 'ng' ? '×' : '△') + '</div>' +
+      '<div><div class="name"></div><div class="val"></div></div>';
+    d.querySelector('.name').textContent = name;
+    d.querySelector('.val').textContent = val;
+    list.appendChild(d);
+    document.querySelector('#raw').textContent =
+      results.map(r => (r.state === 'ok' ? '[OK] ' : r.state === 'ng' ? '[NG] ' : '[--] ') + r.name + ': ' + r.val).join('\n');
+  }
+
+  const ua = navigator.userAgent;
+
+  // アプリ内ブラウザの判定。LINEやSNSの中から開くと、カメラが使えないことがある。
+  const inApp = /Line\//i.test(ua) ? 'LINE'
+    : /FBAN|FBAV/i.test(ua) ? 'Facebook'
+    : /Instagram/i.test(ua) ? 'Instagram'
+    : /Twitter/i.test(ua) ? 'X (Twitter)'
+    : /KAKAOTALK/i.test(ua) ? 'KakaoTalk'
+    : null;
+
+  if (inApp) {
+    document.querySelector('#banner').innerHTML =
+      '<div class="banner"><b>' + inApp + 'の中のブラウザで開いています</b>' +
+      'この状態ではカメラを使えないことがあります。画面右上（または右下）のメニューから' +
+      '「ブラウザで開く」「Chromeで開く」を選んでから、もう一度お試しください。</div>';
+  }
+
+  add(inApp ? 'ng' : 'ok', 'ブラウザの種類', inApp ? inApp + 'のアプリ内ブラウザ' : '通常のブラウザ');
+  add('wa', '端末の名乗り', ua);
+  const localHost = ['localhost', '127.0.0.1', '::1'].indexOf(location.hostname) >= 0;
+  add(location.protocol === 'https:' ? 'ok' : (localHost ? 'wa' : 'ng'),
+      '接続方式', location.protocol + ' / 現在のURL: ' + location.href);
+  add(window.isSecureContext ? 'ok' : 'ng', '安全な接続として扱われているか', window.isSecureContext);
+  add(navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'ok' : 'ng',
+      'カメラを扱う機能があるか', !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+
+  // 描画の土台
+  let glName = 'なし', renderer = '不明';
+  try {
+    const cv = document.createElement('canvas');
+    const gl = cv.getContext('webgl2') || cv.getContext('webgl') || cv.getContext('experimental-webgl');
+    if (gl) {
+      glName = cv.getContext('webgl2') ? 'WebGL2' : 'WebGL1';
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      if (dbg) renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+      else renderer = gl.getParameter(gl.RENDERER);
+    }
+  } catch (e) { glName = 'エラー: ' + e.message; }
+  add(glName.indexOf('WebGL') === 0 ? 'ok' : 'ng', '3D描画(WebGL)', glName + ' / ' + renderer);
+
+  add(typeof WebAssembly === 'object' ? 'ok' : 'ng', 'WebAssembly', typeof WebAssembly === 'object');
+  add(typeof OffscreenCanvas === 'function' ? 'ok' : 'wa', 'OffscreenCanvas', typeof OffscreenCanvas === 'function');
+  add(typeof Worker === 'function' ? 'ok' : 'ng', 'Worker', typeof Worker === 'function');
+  add('wa', '画面の大きさ', window.innerWidth + ' x ' + window.innerHeight + ' / 倍率 ' + (window.devicePixelRatio || 1));
+
+  // 必要なファイルが取れるか
+  ['./assets/targets.mind', './assets/logo-mark.png',
+   'https://aframe.io/releases/1.5.0/aframe.min.js',
+   'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js'].forEach(function (u) {
+    const t0 = Date.now();
+    fetch(u, { cache: 'no-store' })
+      .then(function (r) { return r.arrayBuffer().then(function (b) {
+        add(r.ok ? 'ok' : 'ng', '取得: ' + u.split('/').pop(),
+            r.status + ' / ' + b.byteLength + ' bytes / ' + (Date.now() - t0) + 'ms');
+      }); })
+      .catch(function (e) { add('ng', '取得: ' + u.split('/').pop(), '失敗 ' + e.message); });
+  });
+
+  // カメラの権限（対応していないブラウザもある）
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'camera' })
+      .then(function (s) { add(s.state === 'denied' ? 'ng' : 'ok', 'カメラの許可の状態', s.state); })
+      .catch(function () { add('wa', 'カメラの許可の状態', 'この端末では調べられません'); });
+  } else {
+    add('wa', 'カメラの許可の状態', 'この端末では調べられません');
+  }
+
+  document.querySelector('#camBtn').addEventListener('click', function () {
+    this.disabled = true;
+    this.textContent = 'カメラを起動しています…';
+    const self = this;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+      .then(function (st) {
+        const t = st.getVideoTracks()[0];
+        const s = t.getSettings ? t.getSettings() : {};
+        add('ok', 'カメラの起動', '成功 / ' + (s.width || '?') + 'x' + (s.height || '?') + ' / ' + (t.label || '名称不明'));
+        st.getTracks().forEach(function (x) { x.stop(); });
+        self.textContent = 'カメラは使えました';
+      })
+      .catch(function (e) {
+        add('ng', 'カメラの起動', '失敗 / ' + e.name + ' / ' + e.message);
+        self.textContent = 'カメラを使えませんでした';
+      });
+  });
+
+  document.querySelector('#copyBtn').addEventListener('click', function () {
+    const t = document.querySelector('#raw').textContent;
+    const self = this;
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
+      .then(function () { self.textContent = 'コピーしました'; })
+      .catch(function () { self.textContent = '下の黒い枠を長押しして選んでください'; });
+  });
+})();
+</script>
+</body>
+</html>

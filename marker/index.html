@@ -153,6 +153,16 @@
     statusEl.style.display = 'none';
   }
 
+  // 0. アプリ内ブラウザの判定。LINEやSNSの中から開くと、
+  //    Androidではカメラを使えないことがある。先に案内する。
+  const ua = navigator.userAgent;
+  const inApp = /Line\//i.test(ua) ? 'LINE'
+    : /FBAN|FBAV/i.test(ua) ? 'Facebook'
+    : /Instagram/i.test(ua) ? 'Instagram'
+    : /Twitter/i.test(ua) ? 'X (Twitter)'
+    : /KAKAOTALK/i.test(ua) ? 'KakaoTalk'
+    : null;
+
   // 1. httpsかどうかを、カメラを触る前に判定する
   const url = new URL(location.href);
   const localHost = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
@@ -181,9 +191,13 @@
   });
   scene.addEventListener('arError', (e) => {
     fail('ARを開始できませんでした',
-      '<p>カメラの使用が許可されなかったか、他のアプリがカメラを使っている可能性があります。' +
-      'ページを再読み込みして、カメラの確認が出たら「許可」を選んでください。</p>',
-      'arError: ' + JSON.stringify(e && e.detail || {}));
+      (inApp
+        ? '<p><b>' + inApp + 'の中のブラウザで開いています。</b>この状態ではカメラを使えないことがあります。' +
+          '画面のメニューから「ブラウザで開く」または「Chromeで開く」を選んで、もう一度お試しください。</p>'
+        : '<p>カメラの使用が許可されなかったか、他のアプリがカメラを使っている可能性があります。' +
+          'ページを再読み込みして、カメラの確認が出たら「許可」を選んでください。</p>') +
+      '<p><a href="./check.html" style="color:#7fd1ff">くわしく調べる（診断ページ）</a></p>',
+      'arError: ' + JSON.stringify(e && e.detail || {}) + ' / ' + ua);
   });
 
   target.addEventListener('targetFound', () => {
@@ -218,7 +232,11 @@
       '<li>他のアプリやタブがカメラを使っている</li>' +
       '<li>認識ファイル（targets.mind）か3Dモデルを読み込めていない</li>' +
       '<li>通信が遅く、ライブラリの取得が終わっていない</li>' +
-      '</ol><p>ページを再読み込みすると直ることがあります。</p>',
+      '</ol>' +
+      (inApp ? '<p><b>' + inApp + 'の中のブラウザで開いています。</b>' +
+        'メニューから「ブラウザで開く」を選ぶと直ることがあります。</p>' : '') +
+      '<p>ページを再読み込みすると直ることがあります。</p>' +
+      '<p><a href="./check.html" style="color:#7fd1ff">くわしく調べる（診断ページ）</a></p>',
       '映像の要素: ' + (video ? (video.videoWidth + 'x' + video.videoHeight) : 'なし') +
       ' / A-Frame: ' + (window.AFRAME ? window.AFRAME.version : '未読込') +
       ' / MindAR: ' + (window.MINDAR ? 'あり' : 'なし'));
