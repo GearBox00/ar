@@ -8,7 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 <style>
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
-  body { position:fixed; inset:0; }
+  body { position:fixed; inset:0; touch-action:none; }
   a-scene { width:100vw; height:100vh; }
 
   .ui {
@@ -25,10 +25,24 @@
   }
   .ui a { color:#7fd1ff; }
 
+  /* 指の操作の案内 */
+  #touchbar {
+    position:fixed; left:12px; right:12px; z-index:100;
+    bottom:calc(112px + env(safe-area-inset-bottom));
+    display:flex; gap:10px; align-items:center; justify-content:space-between;
+    padding:8px 10px 8px 14px; border-radius:999px;
+    background:rgba(0,0,0,.55); color:#fff;
+    font-family:system-ui, sans-serif; font-size:12.5px;
+  }
+  #touchbar button {
+    flex:none; padding:7px 14px; border:none; border-radius:999px;
+    background:rgba(255,255,255,.9); color:#16181d; font-size:12.5px; font-weight:600;
+  }
+
   /* しばらく見つからないときのヒント */
   #hint {
     position:fixed; left:12px; right:12px; z-index:100;
-    bottom:calc(112px + env(safe-area-inset-bottom));
+    bottom:calc(164px + env(safe-area-inset-bottom));
     display:none; padding:12px 14px; border-radius:10px;
     background:rgba(20,24,30,.9); color:#fff;
     font-family:system-ui, sans-serif; font-size:13px; line-height:1.7;
@@ -69,6 +83,12 @@
   </div>
 </div>
 
+<!-- 指で操作するための案内と、元に戻すボタン -->
+<div id="touchbar">
+  <span id="touchhint">1本指でずらす／2本指で回す・大きさを変える</span>
+  <button id="resetBtn" type="button">元に戻す</button>
+</div>
+
 <div id="hint"></div>
 
 <div id="error">
@@ -93,6 +113,11 @@
 
   <a-entity id="target" mindar-image-target="targetIndex: 0">
     <a-plane position="0 0 0" height="1" width="1" color="#00ffcc" opacity="0.12"></a-plane>
+
+    <!-- #content より内側が、指で動かせる範囲。
+         マーカーへの固定は #target が持ち、指の操作は #content にだけ効かせる。
+         こうすると、動かしてもマーカーから外れない。 -->
+    <a-entity id="content">
 
     <!-- 影。実際の影ではなく、浮き沈みに合わせて濃さと大きさを変える円で代用する -->
     <a-circle id="shadow" radius="0.17" position="0 0.12 0.004" color="#000000" opacity="0.28"
@@ -124,6 +149,8 @@
     <!-- 社名ロゴ: カードから立ち上がる看板 -->
     <a-plane id="sign" width="0.80" height="0.246" position="0 -0.32 0.128" rotation="-90 0 0"
       material="src: #logoLockup; side: double"></a-plane>
+
+    </a-entity><!-- /#content -->
 
     <a-light type="ambient" intensity="0.85"></a-light>
     <a-light type="directional" intensity="0.7" position="1 2 1.5"></a-light>
@@ -208,6 +235,87 @@
     statusEl.textContent = 'マーカーをさがしています';
     statusEl.classList.remove('found');
   });
+
+  // 指で動かす・回す・大きさを変える。
+  // マーカーへの固定は #target が持ち、指の操作は #content にだけ効かせる。
+  // こうすると、動かしてもマーカーから外れない。
+  (function setupTouch() {
+    const content = document.querySelector('#content');
+    const HOME = { x: 0, y: 0, rot: 0, scale: 1 };
+    const st = Object.assign({}, HOME);
+    const PAN_PER_PX = 0.0045;   // 画面1pxあたり、マーカー何個ぶん動かすか
+    const MIN_SCALE = 0.25, MAX_SCALE = 4, MAX_PAN = 1.5;
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+    function apply() {
+      const o = content.object3D;
+      o.position.set(st.x, st.y, 0);
+      o.rotation.z = st.rot;
+      o.scale.set(st.scale, st.scale, st.scale);
+    }
+
+    const pts = new Map();
+    let start = null;
+
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const angle = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+    const two = () => { const v = [...pts.values()]; return [v[0], v[1]]; };
+
+    function begin() {
+      if (pts.size === 1) {
+        const p = [...pts.values()][0];
+        start = { mode: 1, x: p.x, y: p.y, base: Object.assign({}, st) };
+      } else if (pts.size >= 2) {
+        const [a, b] = two();
+        start = { mode: 2, d: dist(a, b), a: angle(a, b), base: Object.assign({}, st) };
+      }
+    }
+
+    function move() {
+      if (!start) return;
+      if (start.mode === 1 && pts.size === 1) {
+        const p = [...pts.values()][0];
+        st.x = clamp(start.base.x + (p.x - start.x) * PAN_PER_PX, -MAX_PAN, MAX_PAN);
+        st.y = clamp(start.base.y - (p.y - start.y) * PAN_PER_PX, -MAX_PAN, MAX_PAN);
+      } else if (start.mode === 2 && pts.size >= 2) {
+        const [a, b] = two();
+        const d = dist(a, b);
+        if (start.d > 4) st.scale = clamp(start.base.scale * (d / start.d), MIN_SCALE, MAX_SCALE);
+        st.rot = start.base.rot + (angle(a, b) - start.a);
+      }
+      apply();
+    }
+
+    const el = document.body;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('#touchbar') || e.target.closest('.ui') || e.target.closest('#error')) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      begin();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      move();
+    }, { passive: true });
+    const end = (e) => { pts.delete(e.pointerId); start = null; if (pts.size) begin(); };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('pointerleave', end);
+
+    // PCで確かめるとき用。ホイールで大きさを変える
+    el.addEventListener('wheel', (e) => {
+      st.scale = clamp(st.scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08), MIN_SCALE, MAX_SCALE);
+      apply();
+    }, { passive: true });
+
+    document.querySelector('#resetBtn').addEventListener('click', () => {
+      Object.assign(st, HOME);
+      apply();
+    });
+
+    // 検証や外部から状態を見るための入口
+    window.__arTransform = { state: st, apply, reset: () => { Object.assign(st, HOME); apply(); } };
+  })();
 
   // 3. 認識が始まらないときのヒント（左下の見本と、映している絵が同じか）
   let everFound = false;
