@@ -115,7 +115,7 @@ https://gearbox00.github.io/ar/ で公開済み。本メモは、その上に「
 
 冒頭で次のように言う。
 
-「ARフォトフレームの続き。`E:\claude_projectsr` の README と `docs/企画_AR統合アプリ.md` を読んで。段階1（撮影・保存・共有）から」
+「ARフォトフレームの続き。`E:\claude_projects\ar` の README と `docs/企画_AR統合アプリ.md` を読んで。段階1（撮影・保存・共有）から」
 
 会話にしか無い情報は無い。判断はすべてこのメモと README に書いてある。
 
