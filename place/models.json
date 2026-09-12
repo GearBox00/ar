@@ -1,0 +1,50 @@
+[
+  {
+    "name": "gearbox-logo",
+    "label": "ロゴの立て看板",
+    "glb": "./assets/gearbox-logo.glb",
+    "usdz": "./assets/gearbox-logo.usdz",
+    "size": {
+      "w": 0.625,
+      "h": 0.616,
+      "d": 0.226
+    },
+    "note": "幅0.625m × 高さ0.616m × 奥行0.226m"
+  },
+  {
+    "name": "box-s",
+    "label": "小箱（名刺サイズ）",
+    "glb": "./assets/box-s.glb",
+    "usdz": "./assets/box-s.usdz",
+    "size": {
+      "w": 0.12,
+      "h": 0.061,
+      "d": 0.081
+    },
+    "note": "幅0.12m × 高さ0.061m × 奥行0.081m"
+  },
+  {
+    "name": "box-m",
+    "label": "中箱（ギフト箱）",
+    "glb": "./assets/box-m.glb",
+    "usdz": "./assets/box-m.usdz",
+    "size": {
+      "w": 0.25,
+      "h": 0.101,
+      "d": 0.181
+    },
+    "note": "幅0.25m × 高さ0.101m × 奥行0.181m"
+  },
+  {
+    "name": "box-l",
+    "label": "大箱（配送箱）",
+    "glb": "./assets/box-l.glb",
+    "usdz": "./assets/box-l.usdz",
+    "size": {
+      "w": 0.4,
+      "h": 0.251,
+      "d": 0.301
+    },
+    "note": "幅0.4m × 高さ0.251m × 奥行0.301m"
+  }
+]

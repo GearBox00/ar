@@ -97,6 +97,62 @@ window.buildAndExport = async (opts) => {
     meshes: root.children.length,
   };
 };
+// パッケージ（箱）。印刷会社向けに、刷り上がりの箱を原寸で置いて見せる用途。
+// 前面と上面にロゴ、他の面はブランド色。単位はメートル。
+window.buildBoxAndExport = async (opts) => {
+  const YELLOW = 0xFFDE59;
+  const wordTex = await loadTex(opts.wordUrl);
+  const { w, h, d } = opts;   // 幅・高さ・奥行
+
+  const root = new THREE.Group();
+  root.name = opts.name || 'Box';
+
+  const plain = new THREE.MeshStandardMaterial({ color: YELLOW, roughness: 0.65 });
+  const white = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.7 });
+  // 面の順: +x, -x, +y(上), -y(下), +z(前), -z(後)
+  const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [plain, plain, white, plain, white, plain]);
+  box.position.y = h / 2;
+  box.name = 'body';
+  root.add(box);
+
+  // ロゴを前面と上面に貼る（薄い板を面のすぐ外側に置く）
+  const ratio = 430 / 1400;
+  const place = (faceW, faceH, pos, rot) => {
+    const lw = faceW * 0.86, lh = lw * ratio;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(lw, Math.min(lh, faceH * 0.8)),
+      new THREE.MeshStandardMaterial({ map: wordTex, roughness: 0.7 }));
+    m.position.copy(pos); m.rotation.copy(rot);
+    root.add(m);
+  };
+  place(w, h, new THREE.Vector3(0, h / 2, d / 2 + 0.0008), new THREE.Euler(0, 0, 0));
+  place(w, d, new THREE.Vector3(0, h + 0.0008, 0), new THREE.Euler(-Math.PI / 2, 0, 0));
+
+  // 箱のふちに細い線を入れて、白い面でも輪郭が分かるようにする
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)),
+    new THREE.LineBasicMaterial({ color: 0x8a7a2a }));
+  edges.position.y = h / 2;
+  // 線は usdz に出せないため glb のみに入れる（後で外す）
+  root.add(edges);
+
+  const scene = new THREE.Scene();
+  scene.add(root);
+  const glb = await new Promise((res, rej) => new GLTFExporter().parse(scene, res, rej, { binary: true }));
+  root.remove(edges);
+  const usdz = await new USDZExporter().parseAsync(scene);
+
+  const b64 = (buf) => {
+    const bytes = new Uint8Array(buf);
+    let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s);
+  };
+  const bb = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3(); bb.getSize(size);
+  return {
+    glb: b64(glb), usdz: b64(usdz.buffer ? usdz.buffer : usdz),
+    size: { w: +size.x.toFixed(3), h: +size.y.toFixed(3), d: +size.z.toFixed(3) },
+  };
+};
 window.__ready = true;
 </script>
 </body>

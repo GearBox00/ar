@@ -6,12 +6,13 @@
  * やること:
  *   1. GLBを place/assets/ へコピー
  *   2. iPhoneのAR表示に要る usdz を作る（three.js の書き出し機能をこのPCで走らせる）
- *   3. place/index.html の参照先と、寸法の説明文を書き換える
+ *   3. place/models.json（置くものの一覧）に加える。ページはこの一覧から読む
  *
  *   --height  いちばん長い辺を何メートルにするか（省略すると元の寸法のまま）
  *   --name    出力するファイル名（既定は元のファイル名）
- *   --label   ページに出す説明文
- *   --dry     書き換えずに、変換結果だけ見る
+ *   --label   一覧に出す名前
+ *   --default 最初に選ばれた状態にする
+ *   --dry     一覧を書き換えずに、変換結果だけ見る
  */
 const fs = require('fs');
 const path = require('path');
@@ -103,24 +104,24 @@ function serve(root) {
 
   if (flag('dry')) { console.log('\n--dry のため、ページは書き換えていません。'); return; }
 
-  // place/index.html の参照先と説明文を書き換える
-  const pagePath = path.join(ROOT, 'place', 'index.html');
-  let html = fs.readFileSync(pagePath, 'utf8');
-  const before = html;
-  html = html.replace(/src="\.\/assets\/[^"]+\.glb"/, `src="./assets/${NAME}.glb"`);
-  html = html.replace(/ios-src="\.\/assets\/[^"]+\.usdz"/, `ios-src="./assets/${NAME}.usdz"`);
-
-  const desc = (LABEL ? LABEL + '。' : '') +
-    `実寸は 幅${out.after.w}m × 高さ${out.after.h}m × 奥行${out.after.d}m で、ARで置くと原寸のまま表示されます。`;
-  html = html.replace(/(<h2>このモデルについて<\/h2>\s*<p[^>]*>)[\s\S]*?(<\/p>)/, `$1\n      ${desc}\n    $2`);
-  html = html.replace(/ロゴが原寸（高さ約\d+cm）でその場に置かれます/,
-    `モデルが原寸（高さ約${Math.round(out.after.h * 100)}cm）でその場に置かれます`);
-
-  if (html === before) {
-    console.log('\nページの書き換え箇所が見つかりませんでした。place/index.html を手で直してください。');
-  } else {
-    fs.writeFileSync(pagePath, html, 'utf8');
-    console.log('\nplace/index.html を書き換えました。');
-  }
+  // 置くものの一覧（place/models.json）に加える。ページは一覧から読むので、ここに足せば選べるようになる
+  const listPath = path.join(ROOT, 'place', 'models.json');
+  let list = [];
+  if (fs.existsSync(listPath)) { try { list = JSON.parse(fs.readFileSync(listPath, 'utf8')); } catch (e) { list = []; } }
+  const entry = {
+    name: NAME,
+    label: LABEL || NAME,
+    glb: './assets/' + NAME + '.glb',
+    usdz: './assets/' + NAME + '.usdz',
+    size: out.after,
+    note: '幅' + out.after.w + 'm × 高さ' + out.after.h + 'm × 奥行' + out.after.d + 'm',
+  };
+  const idx = list.findIndex((e) => e.name === NAME);
+  if (idx >= 0) list[idx] = entry; else list.push(entry);
+  if (flag('default')) { list = [entry].concat(list.filter((e) => e.name !== NAME)); }
+  fs.writeFileSync(listPath, JSON.stringify(list, null, 2) + String.fromCharCode(10), 'utf8');
+  console.log('');
+  console.log('place/models.json に「' + entry.label + '」を加えました（' + list.length + '件）。');
+  if (!flag('default')) console.log('最初に選ばれた状態にするには --default を付けてください。');
   console.log('公開するには: git add -A && git commit && git push');
 })();
