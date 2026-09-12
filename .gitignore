@@ -2,3 +2,4 @@
 marker/assets/generated/compare.mind
 node_modules/
 tools/host.txt
+server/config.local.php

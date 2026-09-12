@@ -6,6 +6,7 @@
 <title>AR試作① 画像マーカー型</title>
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<script src="../assets/track.js" data-page="marker"></script>
 <style>
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
   body { position:fixed; inset:0; touch-action:none; }
@@ -267,6 +268,7 @@
     statusEl.textContent = 'マーカーをさがしています';
   });
   scene.addEventListener('arError', (e) => {
+    if (window.arTrack) window.arTrack('error', 'ar_error', { once: true });
     fail('ARを開始できませんでした',
       (inApp
         ? '<p><b>' + inApp + 'の中のブラウザで開いています。</b>この状態ではカメラを使えないことがあります。' +
@@ -280,6 +282,7 @@
   target.addEventListener('targetFound', () => {
     statusEl.textContent = 'マーカーを認識しました';
     statusEl.classList.add('found');
+    if (window.arTrack) window.arTrack('found', '', { once: true });
   });
   target.addEventListener('targetLost', () => {
     statusEl.textContent = 'マーカーをさがしています';
@@ -450,6 +453,7 @@
         img.src = lastUrl;
         note.textContent = '';
         panel.hidden = false;
+        if (window.arTrack) window.arTrack('shot');
       }, 'image/jpeg', 0.92);
     }
 
@@ -459,6 +463,7 @@
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: 'AR写真' });
+          if (window.arTrack) window.arTrack('share');
           return;
         } catch (e) {
           if (e && e.name === 'AbortError') return;   // 利用者が取りやめただけ
@@ -475,6 +480,7 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
+      if (window.arTrack) window.arTrack('save');
       note.textContent = '保存されない場合は、写真を長押しして「画像を保存」を選んでください。';
     }
 

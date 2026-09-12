@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AR試作② 平面設置型</title>
 <script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.0.0/dist/model-viewer.min.js"></script>
+<script src="../assets/track.js" data-page="place"></script>
 <style>
   :root { color-scheme: light dark; }
   body {
@@ -101,7 +102,17 @@
     // URLに選択を残す（共有したときに同じものが開く）
     try { history.replaceState(null, '', '?m=' + encodeURIComponent(m.name)); } catch (e) {}
     window.__placeModel = m;
+    if (window.arTrack && !firstSelect) window.arTrack('model_pick', m.name);
+    firstSelect = false;
   }
+  let firstSelect = true;
+
+  // 「ARで見る」でARが実際に始まったとき
+  mv.addEventListener('ar-status', (e) => {
+    if (e.detail && e.detail.status === 'session-started' && window.arTrack) {
+      window.arTrack('ar_open', window.__placeModel ? window.__placeModel.name : '');
+    }
+  });
 
   fetch('./models.json', { cache: 'no-store' })
     .then((r) => r.json())
