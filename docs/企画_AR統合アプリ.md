@@ -100,6 +100,18 @@ https://gearbox00.github.io/ar/ で公開済み。本メモは、その上に「
    入力検査・レート制限・個人情報を保存しない設計にする
 5. 転送は `E:/claude_projects/filedrop` 等と同じSSH手順（鍵は C:\lanch\.ssh\d2diver.key）
 
+## 3-3. 進捗（2026-09-12）
+
+| 段階 | 状態 |
+| --- | --- |
+| 1 撮影・保存・共有 | **完了・公開済み** |
+| 3 商品切替（箱 小・中・大） | **完了・公開済み** |
+| 2 計測（Xサーバー） | **完了・稼働中**。security-review で1件（Origin無しの受け付け）を直してから転送 |
+| 4 スタンプラリー | 未着手 |
+
+計測の集計画面は `https://gearbox-app-origin.net/ar-api/stats.php?key=…`。
+キーは `server/config.local.php` の `stats_key`（Gitに入れていない）。
+
 ## 4. 段階案
 
 | 段階 | 内容 | 成果 |
