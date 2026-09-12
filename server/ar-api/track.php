@@ -25,7 +25,9 @@ if ($origin !== '' && in_array($origin, $config['allowed_origins'], true)) {
 }
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit; }
-if ($origin !== '' && !in_array($origin, $config['allowed_origins'], true)) { http_response_code(403); exit; }
+// 正規の送信はすべてブラウザ経由（別ドメインからの呼び出し）で、その場合ブラウザは必ずOriginを付ける。
+// Originが無いもの（curl等）は受け付けない。数字の水増しに使われる経路を塞ぐため
+if ($origin === '' || !in_array($origin, $config['allowed_origins'], true)) { http_response_code(403); exit; }
 
 // 本文は小さいはず。大きいものは読まない
 $raw = file_get_contents('php://input', false, null, 0, 2048);
