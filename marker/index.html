@@ -39,10 +39,41 @@
     background:rgba(255,255,255,.9); color:#16181d; font-size:12.5px; font-weight:600;
   }
 
+  /* 撮影ボタン。操作バーの上に丸く置く */
+  #shotBtn {
+    position:fixed; left:50%; transform:translateX(-50%); z-index:101;
+    bottom:calc(168px + env(safe-area-inset-bottom));
+    width:64px; height:64px; border-radius:50%; border:4px solid rgba(255,255,255,.9);
+    background:rgba(0,0,0,.35); padding:0; display:flex; align-items:center; justify-content:center;
+  }
+  #shotBtn span { width:46px; height:46px; border-radius:50%; background:#fff; display:block; }
+  #shotBtn:disabled { opacity:.35; }
+  #shotBtn:active span { transform:scale(.9); }
+
+  /* 撮った写真の確認画面 */
+  #photo {
+    position:fixed; inset:0; z-index:9000; background:#0e1116; color:#f2f4f7;
+    display:flex; flex-direction:column; padding:calc(12px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+    font-family:system-ui, "Hiragino Kaku Gothic ProN", sans-serif;
+  }
+  /* hidden属性を display:flex が打ち消してしまうため、明示して隠す */
+  #photo[hidden] { display:none; }
+  .photo-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .photo-head b { font-size:16px; }
+  .photo-head button { background:none; border:1px solid rgba(255,255,255,.4); color:#fff; padding:6px 14px; border-radius:999px; font-size:13px; }
+  #photoImg { flex:1; min-height:0; width:100%; object-fit:contain; background:#000; border-radius:10px; }
+  .photo-actions { display:flex; gap:10px; margin-top:12px; }
+  .photo-actions button {
+    flex:1; padding:14px; border:none; border-radius:12px; font-size:15px; font-weight:600;
+    background:#FFDE59; color:#16181d;
+  }
+  .photo-actions button.sub { background:rgba(255,255,255,.14); color:#fff; }
+  #photoNote { font-size:12.5px; opacity:.8; margin:10px 0 0; line-height:1.6; min-height:1.6em; }
+
   /* しばらく見つからないときのヒント */
   #hint {
     position:fixed; left:12px; right:12px; z-index:100;
-    bottom:calc(164px + env(safe-area-inset-bottom));
+    bottom:calc(246px + env(safe-area-inset-bottom));
     display:none; padding:12px 14px; border-radius:10px;
     background:rgba(20,24,30,.9); color:#fff;
     font-family:system-ui, sans-serif; font-size:13px; line-height:1.7;
@@ -87,6 +118,25 @@
 <div id="touchbar">
   <span id="touchhint">1本指でずらす／2本指で回す・大きさを変える</span>
   <button id="resetBtn" type="button">元に戻す</button>
+</div>
+
+<!-- 撮影ボタン。カメラ映像とCGを1枚に合成し、枠を付けた写真にする -->
+<button id="shotBtn" type="button" aria-label="撮る" disabled>
+  <span></span>
+</button>
+
+<!-- 撮った写真の確認画面 -->
+<div id="photo" hidden>
+  <div class="photo-head">
+    <b>撮れました</b>
+    <button id="photoClose" type="button">閉じる</button>
+  </div>
+  <img id="photoImg" alt="撮影した写真">
+  <div class="photo-actions">
+    <button id="photoShare" type="button">共有する</button>
+    <button id="photoSave" type="button" class="sub">保存する</button>
+  </div>
+  <p id="photoNote"></p>
 </div>
 
 <div id="hint"></div>
@@ -288,7 +338,8 @@
 
     const el = document.body;
     el.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('#touchbar') || e.target.closest('.ui') || e.target.closest('#error')) return;
+      if (e.target.closest('#touchbar') || e.target.closest('.ui') || e.target.closest('#error') ||
+          e.target.closest('#shotBtn') || e.target.closest('#photo')) return;
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       begin();
     });
@@ -315,6 +366,125 @@
 
     // 検証や外部から状態を見るための入口
     window.__arTransform = { state: st, apply, reset: () => { Object.assign(st, HOME); apply(); } };
+  })();
+
+  // 撮影。カメラ映像と3Dの描画を1枚に合成し、会社の枠を付ける。
+  // 画面のボタンや案内（DOM）は写らない。写るのは映像・CG・枠だけ。
+  (function setupCapture() {
+    const btn    = document.querySelector('#shotBtn');
+    const panel  = document.querySelector('#photo');
+    const img    = document.querySelector('#photoImg');
+    const note   = document.querySelector('#photoNote');
+    const lockup = new Image();
+    lockup.src = './assets/logo-lockup.png';
+    let lastBlob = null, lastUrl = null, lastName = '';
+
+    scene.addEventListener('arReady', () => { btn.disabled = false; });
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function drawFrame(ctx, W, H) {
+      const b = Math.max(8, Math.round(Math.min(W, H) * 0.022));  // 枠の太さ
+      ctx.save();
+      ctx.strokeStyle = '#FFDE59';
+      ctx.lineWidth = b;
+      ctx.strokeRect(b / 2, b / 2, W - b, H - b);
+
+      // 下の帯。ロゴと日付を入れる
+      const bandH = Math.round(Math.min(W, H) * 0.13);
+      ctx.fillStyle = '#FFDE59';
+      ctx.fillRect(b, H - b - bandH, W - b * 2, bandH);
+      if (lockup.complete && lockup.naturalWidth) {
+        const lh = bandH * 0.78, lw = lh * (lockup.naturalWidth / lockup.naturalHeight);
+        ctx.drawImage(lockup, b + bandH * 0.25, H - b - bandH + (bandH - lh) / 2, lw, lh);
+      }
+      const d = new Date();
+      const stamp = d.getFullYear() + '.' + pad2(d.getMonth() + 1) + '.' + pad2(d.getDate());
+      ctx.fillStyle = '#1a1a1a';
+      ctx.font = '600 ' + Math.round(bandH * 0.3) + 'px system-ui, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(stamp, W - b - bandH * 0.3, H - b - bandH / 2);
+      ctx.restore();
+    }
+
+    function compose() {
+      const video = document.querySelector('video');
+      const gl = scene.canvas;
+      const W = window.innerWidth, H = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);   // 大きすぎると保存が重くなる
+      const out = document.createElement('canvas');
+      out.width = Math.round(W * dpr);
+      out.height = Math.round(H * dpr);
+      const ctx = out.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+
+      // カメラ映像。画面上の位置と大きさのまま写す（MindARが引き伸ばした状態を再現）
+      if (video && video.videoWidth) {
+        const r = video.getBoundingClientRect();
+        ctx.drawImage(video, r.left, r.top, r.width, r.height);
+      }
+      // 3D。描いた直後に写し取る（描画バッファが残っているうちに）
+      if (gl && scene.renderer) {
+        scene.renderer.render(scene.object3D, scene.camera);
+        const r = gl.getBoundingClientRect();
+        ctx.drawImage(gl, r.left, r.top, r.width, r.height);
+      }
+      drawFrame(ctx, W, H);
+      return out;
+    }
+
+    function shoot() {
+      let cv;
+      try { cv = compose(); } catch (e) { note.textContent = '撮影に失敗しました: ' + e.message; return; }
+      cv.toBlob((blob) => {
+        if (!blob) { note.textContent = '画像を作れませんでした'; return; }
+        if (lastUrl) URL.revokeObjectURL(lastUrl);
+        lastBlob = blob;
+        lastUrl = URL.createObjectURL(blob);
+        const d = new Date();
+        lastName = 'ar-' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '-' +
+                   pad2(d.getHours()) + pad2(d.getMinutes()) + pad2(d.getSeconds()) + '.jpg';
+        img.src = lastUrl;
+        note.textContent = '';
+        panel.hidden = false;
+      }, 'image/jpeg', 0.92);
+    }
+
+    async function share() {
+      if (!lastBlob) return;
+      const file = new File([lastBlob], lastName, { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'AR写真' });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;   // 利用者が取りやめただけ
+        }
+      }
+      note.textContent = 'この端末では共有画面を開けません。「保存する」からお試しください。';
+    }
+
+    function save() {
+      if (!lastUrl) return;
+      const a = document.createElement('a');
+      a.href = lastUrl;
+      a.download = lastName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      note.textContent = '保存されない場合は、写真を長押しして「画像を保存」を選んでください。';
+    }
+
+    btn.addEventListener('click', shoot);
+    document.querySelector('#photoShare').addEventListener('click', share);
+    document.querySelector('#photoSave').addEventListener('click', save);
+    document.querySelector('#photoClose').addEventListener('click', () => { panel.hidden = true; });
+
+    // 検証用の入口
+    window.__arPhoto = { shoot, last: () => lastBlob, name: () => lastName };
   })();
 
   // 3. 認識が始まらないときのヒント（左下の見本と、映している絵が同じか）
