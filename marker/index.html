@@ -184,11 +184,11 @@
       <a-entity animation__tilt="property: rotation; from: -7 0 0; to: 7 0 0; dir: alternate; loop: true; dur: 5200; easing: easeInOutSine">
         <a-entity animation="property: rotation; to: 0 0 360; loop: true; dur: 7000; easing: linear">
           <!-- 黄色い縁（横から見たときのブランド色）。少しつやを持たせる -->
-          <a-cylinder radius="0.17" height="0.04" rotation="90 0 0"
+          <a-cylinder class="grabbable" radius="0.17" height="0.04" rotation="90 0 0"
             material="color: #FFDE59; metalness: 0.3; roughness: 0.28"></a-cylinder>
           <!-- 白地。元のロゴは白背景を前提にした絵なので、透けた部分に白を置く -->
-          <a-circle radius="0.155" position="0 0 0.021" material="color: #FFFFFF; roughness: 0.45"></a-circle>
-          <a-circle radius="0.155" position="0 0 -0.021" rotation="0 180 0" material="color: #FFFFFF; roughness: 0.45"></a-circle>
+          <a-circle class="grabbable" radius="0.155" position="0 0 0.021" material="color: #FFFFFF; roughness: 0.45"></a-circle>
+          <a-circle class="grabbable" radius="0.155" position="0 0 -0.021" rotation="0 180 0" material="color: #FFFFFF; roughness: 0.45"></a-circle>
           <a-plane width="0.44" height="0.44" position="0 0 0.024"
             material="src: #logoMark; transparent: true; alphaTest: 0.35"></a-plane>
           <a-plane width="0.44" height="0.44" position="0 0 -0.024" rotation="0 180 0"
@@ -198,7 +198,7 @@
     </a-entity>
 
     <!-- 社名ロゴ: カードから立ち上がる看板 -->
-    <a-plane id="sign" width="0.80" height="0.246" position="0 -0.32 0.128" rotation="-90 0 0"
+    <a-plane id="sign" class="grabbable" width="0.80" height="0.246" position="0 -0.32 0.128" rotation="-90 0 0"
       material="src: #logoLockup; side: double"></a-plane>
 
     </a-entity><!-- /#content -->
@@ -309,16 +309,48 @@
 
     const pts = new Map();
     let start = null;
+    let grabbed = false;   // いま物をつかんでいるか
 
     const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
     const angle = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
     const two = () => { const v = [...pts.values()]; return [v[0], v[1]]; };
 
+    // 指先から3D空間へ線を飛ばし、物に当たったかを調べる。
+    // 画面のどこでも動くと「つかんでいる」感じが出ないため、当たったときだけ動かす。
+    const ray = new AFRAME.THREE.Raycaster();
+    const ndc = new AFRAME.THREE.Vector2();
+    function hitTest(x, y) {
+      const cv = scene.canvas;
+      if (!cv || !scene.camera) return false;
+      const r = cv.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return false;
+      ndc.x = ((x - r.left) / r.width) * 2 - 1;
+      ndc.y = -((y - r.top) / r.height) * 2 + 1;
+      ray.setFromCamera(ndc, scene.camera);
+      const targets = [...document.querySelectorAll('.grabbable')]
+        .map((e) => e.getObject3D('mesh')).filter(Boolean);
+      return ray.intersectObjects(targets, true).length > 0;
+    }
+
+    const hintEl = document.querySelector('#touchhint');
+    const HINT_DEFAULT = '物に触れてずらす／2本指で回す・大きさを変える';
+    let hintTimer = 0;
+    function say(text, back) {
+      hintEl.textContent = text;
+      clearTimeout(hintTimer);
+      if (back) hintTimer = setTimeout(() => { hintEl.textContent = HINT_DEFAULT; }, 1600);
+    }
+    hintEl.textContent = HINT_DEFAULT;
+
     function begin() {
       if (pts.size === 1) {
         const p = [...pts.values()][0];
+        grabbed = hitTest(p.x, p.y);
+        if (!grabbed) { say('歯車か看板に触れてください', true); start = null; return; }
+        say('つかんでいます');
         start = { mode: 1, x: p.x, y: p.y, base: Object.assign({}, st) };
       } else if (pts.size >= 2) {
+        // 2本指は全体の操作なので、物に触れていなくても効かせる
         const [a, b] = two();
         start = { mode: 2, d: dist(a, b), a: angle(a, b), base: Object.assign({}, st) };
       }
@@ -351,7 +383,12 @@
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       move();
     }, { passive: true });
-    const end = (e) => { pts.delete(e.pointerId); start = null; if (pts.size) begin(); };
+    const end = (e) => {
+      pts.delete(e.pointerId);
+      start = null;
+      if (grabbed && pts.size === 0) { grabbed = false; say(HINT_DEFAULT); }
+      if (pts.size) begin();
+    };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
     el.addEventListener('pointerleave', end);
@@ -365,10 +402,15 @@
     document.querySelector('#resetBtn').addEventListener('click', () => {
       Object.assign(st, HOME);
       apply();
+      say(HINT_DEFAULT);
     });
 
     // 検証や外部から状態を見るための入口
-    window.__arTransform = { state: st, apply, reset: () => { Object.assign(st, HOME); apply(); } };
+    window.__arTransform = {
+      state: st, apply, hitTest,
+      grabbed: () => grabbed,
+      reset: () => { Object.assign(st, HOME); apply(); },
+    };
   })();
 
   // 撮影。カメラ映像と3Dの描画を1枚に合成し、会社の枠を付ける。
