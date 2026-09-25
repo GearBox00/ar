@@ -7,6 +7,23 @@
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 <script src="../assets/track.js" data-page="marker"></script>
+<script>
+  // 歯車を回したときに、影の形を合わせる。
+  // 円盤の影は、表が上を向けば円、斜めなら楕円、真横なら細い線になる。
+  // （a-scene より前で登録しないと、要素に付けても動かない）
+  AFRAME.registerComponent('shadow-follow', {
+    schema: { target: { type: 'selector' } },
+    init() { this.n = new AFRAME.THREE.Vector3(); },
+    tick() {
+      const t = this.data.target;
+      if (!t) return;
+      this.n.set(0, 0, 1).applyQuaternion(t.object3D.quaternion);   // 歯車の表の向き
+      const o = this.el.object3D;
+      o.rotation.z = Math.atan2(this.n.y, this.n.x);                 // 傾いた方向に合わせる
+      o.scale.set(Math.max(Math.abs(this.n.z), 0.1), 1, 1);          // 傾いた分だけ細くする
+    },
+  });
+</script>
 <style>
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; }
   body { position:fixed; inset:0; touch-action:none; }
@@ -39,6 +56,13 @@
     flex:none; padding:7px 14px; border:none; border-radius:999px;
     background:rgba(255,255,255,.9); color:#16181d; font-size:12.5px; font-weight:600;
   }
+  #touchhint { flex:1; min-width:0; font-size:11.5px; line-height:1.4; }
+  /* 移動／回転の切り替え */
+  #touchbar .modes { display:flex; flex:none; background:rgba(255,255,255,.18); border-radius:999px; padding:2px; }
+  #touchbar .modes button {
+    padding:6px 11px; background:transparent; color:#fff; font-size:12px;
+  }
+  #touchbar .modes button[aria-pressed="true"] { background:#FFDE59; color:#16181d; }
 
   /* 撮影ボタン。操作バーの上に丸く置く */
   #shotBtn {
@@ -117,7 +141,12 @@
 
 <!-- 指で操作するための案内と、元に戻すボタン -->
 <div id="touchbar">
-  <span id="touchhint">1本指でずらす／2本指で回す・大きさを変える</span>
+  <!-- 1本指でなぞったときに何をするかの切り替え -->
+  <div class="modes" role="group" aria-label="指の操作">
+    <button type="button" data-mode="move" aria-pressed="true">移動</button>
+    <button type="button" data-mode="rotate" aria-pressed="false">回転</button>
+  </div>
+  <span id="touchhint">物をなぞって移動</span>
   <button id="resetBtn" type="button">元に戻す</button>
 </div>
 
@@ -171,15 +200,21 @@
     <a-entity id="content">
 
     <!-- 影。実際の影ではなく、浮き沈みに合わせて濃さと大きさを変える円で代用する -->
-    <a-circle id="shadow" radius="0.17" position="0 0.12 0.004" color="#000000" opacity="0.28"
-      material="transparent: true"
-      animation__s="property: scale; from: 1 1 1; to: 0.72 0.72 1; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine"
-      animation__o="property: components.material.material.opacity; from: 0.28; to: 0.14; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine"></a-circle>
+    <!-- 外側（shadowShape）が歯車の向きに合わせた形を、内側が浮き沈みに合わせた濃さと大きさを受け持つ -->
+    <a-entity id="shadowShape" position="0 0.12 0.004" shadow-follow="target: #gear">
+      <a-circle id="shadow" radius="0.17" color="#000000" opacity="0.28"
+        material="transparent: true"
+        animation__s="property: scale; from: 1 1 1; to: 0.72 0.72 1; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine"
+        animation__o="property: components.material.material.opacity; from: 0.28; to: 0.14; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine"></a-circle>
+    </a-entity>
 
     <!-- 歯車マーク: 黄色い円盤に厚みをつけ、表と裏にロゴを貼って回す。
          ロゴは四角い板に貼る（円の板だと模様の貼り方が放射状になり、絵が歪む） -->
-    <a-entity id="gear" position="0 0.12 0.10"
+    <a-entity id="gear" class="rotatable" position="0 0.12 0.10"
       animation__bob="property: position; to: 0 0.12 0.175; dir: alternate; loop: true; dur: 3000; easing: easeInOutSine">
+      <!-- つかみ用の見えない当たり。歯車は回すと真横で薄い板になり指が当たらなくなるため、
+           どの向きでも同じ大きさの球で受ける（描画はしない） -->
+      <a-sphere class="grabbable" radius="0.2" material="visible: false"></a-sphere>
       <!-- わずかに前後へ傾けて、立体感を出す -->
       <a-entity animation__tilt="property: rotation; from: -7 0 0; to: 7 0 0; dir: alternate; loop: true; dur: 5200; easing: easeInOutSine">
         <a-entity animation="property: rotation; to: 0 0 360; loop: true; dur: 7000; easing: linear">
@@ -197,9 +232,14 @@
       </a-entity>
     </a-entity>
 
-    <!-- 社名ロゴ: カードから立ち上がる看板 -->
-    <a-plane id="sign" class="grabbable" width="0.80" height="0.246" position="0 -0.32 0.128" rotation="-90 0 0"
-      material="src: #logoLockup; side: double"></a-plane>
+    <!-- 社名ロゴ: カードから立ち上がる看板。
+         回転の中心を看板自身にするため、外枠（signWrap）で位置を持ち、回転は外枠にかける -->
+    <a-entity id="signWrap" class="rotatable" position="0 -0.32 0.128">
+      <a-plane id="sign" class="grabbable" width="0.80" height="0.246" rotation="-90 0 0"
+        material="src: #logoLockup; side: double"></a-plane>
+      <!-- 看板のつかみ用の見えない当たり。真横を向いても厚みで受ける（描画はしない） -->
+      <a-box class="grabbable" width="0.80" height="0.25" depth="0.25" material="visible: false"></a-box>
+    </a-entity>
 
     </a-entity><!-- /#content -->
 
@@ -319,36 +359,80 @@
     // 画面のどこでも動くと「つかんでいる」感じが出ないため、当たったときだけ動かす。
     const ray = new AFRAME.THREE.Raycaster();
     const ndc = new AFRAME.THREE.Vector2();
+    // 当たった物の「回す単位」（class="rotatable" の要素）を返す。当たらなければ null
     function hitTest(x, y) {
       const cv = scene.canvas;
-      if (!cv || !scene.camera) return false;
+      if (!cv || !scene.camera) return null;
       const r = cv.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
+      if (r.width === 0 || r.height === 0) return null;
       ndc.x = ((x - r.left) / r.width) * 2 - 1;
       ndc.y = -((y - r.top) / r.height) * 2 + 1;
       ray.setFromCamera(ndc, scene.camera);
       const targets = [...document.querySelectorAll('.grabbable')]
         .map((e) => e.getObject3D('mesh')).filter(Boolean);
-      return ray.intersectObjects(targets, true).length > 0;
+      const hits = ray.intersectObjects(targets, true);
+      if (!hits.length) return null;
+      // 当たった形から親をたどり、A-Frameの要素を見つける
+      let o = hits[0].object;
+      while (o && !o.el) o = o.parent;
+      return (o && o.el && o.el.closest('.rotatable')) || null;
     }
 
+    // 1本指でなぞったときの動き。'move'＝位置をずらす、'rotate'＝360度回す
+    let mode = 'move';
+    const HINTS = {
+      move:   '物をなぞって移動／2本指で拡大・ひねり',
+      rotate: '物をなぞって360度回転／2本指で拡大・ひねり',
+    };
     const hintEl = document.querySelector('#touchhint');
-    const HINT_DEFAULT = '物に触れてずらす／2本指で回す・大きさを変える';
     let hintTimer = 0;
     function say(text, back) {
       hintEl.textContent = text;
       clearTimeout(hintTimer);
-      if (back) hintTimer = setTimeout(() => { hintEl.textContent = HINT_DEFAULT; }, 1600);
+      if (back) hintTimer = setTimeout(() => { hintEl.textContent = HINTS[mode]; }, 1600);
     }
-    hintEl.textContent = HINT_DEFAULT;
+    hintEl.textContent = HINTS[mode];
+
+    document.querySelectorAll('#touchbar .modes button').forEach((b) => {
+      b.addEventListener('click', () => {
+        mode = b.dataset.mode;
+        document.querySelectorAll('#touchbar .modes button')
+          .forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+        say(HINTS[mode]);
+      });
+    });
+
+    // なぞった向きに、物を転がすように回す（トラックボール方式）。
+    // 横になぞると縦の軸まわり、縦になぞると横の軸まわり、斜めならその中間の軸まわりに回る。
+    // 軸はカメラから見た向きで決めるので、物がどちらを向いていても「指の動いた方へ表面が動く」。
+    const T = AFRAME.THREE;
+    const ROT_PER_PX = 0.012;   // 画面1pxあたりの回転（ラジアン）。約520pxなぞると1周
+    const _axis = new T.Vector3(), _q = new T.Quaternion(), _camQ = new T.Quaternion(), _parQ = new T.Quaternion();
+    function trackball(obj, dx, dy) {
+      const ang = Math.hypot(dx, dy) * ROT_PER_PX;
+      if (ang === 0) return;
+      _axis.set(dy, dx, 0).normalize();               // カメラから見た回転軸
+      scene.camera.getWorldQuaternion(_camQ);
+      _axis.applyQuaternion(_camQ);                   // カメラの向き → 世界の向き
+      obj.parent.getWorldQuaternion(_parQ);
+      _axis.applyQuaternion(_parQ.invert());          // 世界の向き → 物の親の向き
+      _q.setFromAxisAngle(_axis, ang);
+      obj.quaternion.premultiply(_q);
+    }
 
     function begin() {
       if (pts.size === 1) {
         const p = [...pts.values()][0];
-        grabbed = hitTest(p.x, p.y);
+        const hit = hitTest(p.x, p.y);
+        grabbed = !!hit;
         if (!grabbed) { say('歯車か看板に触れてください', true); start = null; return; }
-        say('つかんでいます');
-        start = { mode: 1, x: p.x, y: p.y, base: Object.assign({}, st) };
+        if (mode === 'rotate') {
+          say('回しています');
+          start = { mode: 'rot', lx: p.x, ly: p.y, target: hit.object3D };
+        } else {
+          say('つかんでいます');
+          start = { mode: 1, x: p.x, y: p.y, base: Object.assign({}, st) };
+        }
       } else if (pts.size >= 2) {
         // 2本指は全体の操作なので、物に触れていなくても効かせる
         const [a, b] = two();
@@ -358,6 +442,12 @@
 
     function move() {
       if (!start) return;
+      if (start.mode === 'rot' && pts.size === 1) {
+        const p = [...pts.values()][0];
+        trackball(start.target, p.x - start.lx, p.y - start.ly);
+        start.lx = p.x; start.ly = p.y;
+        return;
+      }
       if (start.mode === 1 && pts.size === 1) {
         const p = [...pts.values()][0];
         st.x = clamp(start.base.x + (p.x - start.x) * PAN_PER_PX, -MAX_PAN, MAX_PAN);
@@ -386,7 +476,7 @@
     const end = (e) => {
       pts.delete(e.pointerId);
       start = null;
-      if (grabbed && pts.size === 0) { grabbed = false; say(HINT_DEFAULT); }
+      if (grabbed && pts.size === 0) { grabbed = false; say(HINTS[mode]); }
       if (pts.size) begin();
     };
     el.addEventListener('pointerup', end);
@@ -399,17 +489,23 @@
       apply();
     }, { passive: true });
 
-    document.querySelector('#resetBtn').addEventListener('click', () => {
+    // 元に戻す: 位置・大きさ・ひねりに加えて、360度回転した向きも最初に戻す
+    function resetAll() {
       Object.assign(st, HOME);
       apply();
-      say(HINT_DEFAULT);
+      document.querySelectorAll('.rotatable').forEach((e) => e.object3D.quaternion.identity());
+    }
+    document.querySelector('#resetBtn').addEventListener('click', () => {
+      resetAll();
+      say(HINTS[mode]);
     });
 
     // 検証や外部から状態を見るための入口
     window.__arTransform = {
       state: st, apply, hitTest,
       grabbed: () => grabbed,
-      reset: () => { Object.assign(st, HOME); apply(); },
+      mode: () => mode,
+      reset: resetAll,
     };
   })();
 
