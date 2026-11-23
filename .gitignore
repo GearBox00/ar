@@ -3,3 +3,7 @@ marker/assets/generated/compare.mind
 node_modules/
 tools/host.txt
 server/config.local.php
+
+# 弊社の環境の情報を含むため公開しない（2026-11-23 過去の版から削除済み）
+server/deploy.sh
+docs/企画_AR統合アプリ.md
